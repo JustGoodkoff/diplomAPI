@@ -1,0 +1,47 @@
+-- Заполнение таблицы user_statuses
+INSERT INTO "user_statuses" (title, points_required) VALUES
+('Новичок', 0),
+('Активный пользователь', 100),
+('Эксперт', 500);
+
+-- Заполнение таблицы users
+INSERT INTO "users" (username, email, password_hash, full_name, profile_picture_url, status_id, points) VALUES
+('john_doe', 'john.doe@example.com', 'hash1', 'John Doe', 'http://example.com/john.jpg', 1, 50),
+('jane_smith', 'jane.smith@example.com', 'hash2', 'Jane Smith', 'http://example.com/jane.jpg', 2, 150),
+('alice_brown', 'alice.brown@example.com', 'hash3', 'Alice Brown', NULL, 3, 550);
+
+-- Заполнение таблицы point_types
+INSERT INTO "point_types" (title) VALUES
+('Бумага'),
+('Пластик'),
+('Стекло');
+
+-- Заполнение таблицы recycle_points
+INSERT INTO "recycle_points" (title, lat, lon, type_id, work_time_start, work_time_end, work_dates) VALUES
+('Пункт приема бумаги', 55.751244, 37.618423, 1, '09:00', '18:00', 'Пн-Пт'),
+('Пункт приема пластика', 55.752244, 37.619423, 2, '10:00', '19:00', 'Вт-Сб'),
+('Пункт приема стекла', 55.753244, 37.620423, 3, '08:00', '17:00', 'Ср-Вс');
+
+-- Заполнение таблицы event_types
+INSERT INTO "event_types" (title) VALUES
+('Субботник'),
+('Лекция'),
+('Волонтерская помощь');
+
+-- Заполнение таблицы events
+INSERT INTO "events" (creator_id, title, description, lat, lon, address, start_date, end_date, start_time, end_time, type_id, picture_url, is_allowed, is_canceled) VALUES
+(1, 'Субботник в парке', 'Очистим парк от мусора', 55.751244, 37.618423, 'Центральный парк', '2025-01-10', '2025-01-10', '10:00', '14:00', 1, NULL, true, false),
+(2, 'Лекция о переработке', 'Как перерабатывать отходы правильно', 55.752244, 37.619423, 'Библиотека №1', '2025-01-15', NULL, '15:00', '17:00', 2, 'http://example.com/lecture.jpg', true, false),
+(3, 'Волонтерская помощь приюту', 'Помощь в благоустройстве', 55.753244, 37.620423, 'Приют для животных', '2025-01-20', '2025-01-20', '09:00', '12:00', 3, NULL, true, false);
+
+-- Заполнение таблицы event_creators
+INSERT INTO "event_creators" (event_id, user_id) VALUES
+(1, 1),
+(2, 2),
+(3, 3);
+
+-- Заполнение таблицы event_registrations
+INSERT INTO "event_registrations" (user_id, event_id, attendance_confirmed) VALUES
+(1, 1, true),
+(2, 2, false),
+(3, 3, false);
