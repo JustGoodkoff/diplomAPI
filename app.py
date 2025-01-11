@@ -8,7 +8,7 @@ from routes.events import events_bp
 from routes.auth import auth_bp
 
 from database_config import get_db_connection
-
+from flask import Flask, send_from_directory, abort
 from app_config import app, bcrypt, jwt
 
 UPLOAD_FOLDER = 'uploads'
@@ -43,29 +43,70 @@ def get_users():
 
 @app.route('/users/<int:user_id>', methods=['GET'])
 def get_user(user_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    ""
 
-    # cursor.execute("SELECT user_id, username, email, full_name, profile_picture, created_at FROM users WHERE user_id = %s;", (user_id,))
-    cursor.execute("""select u.user_id, u.username, u.email, u.full_name, u.profile_picture, us.title from users as u, user_statuses as us
-                        where u.user_id = %s
-                        and us.status_id = u.status_id""", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
+    if not user_id:
+        return jsonify({'error': 'User ID is required'}), 400
 
-    if user:
-        user_data = {
-            'user_id': user[0],
-            'username': user[1],
-            'email': user[2],
-            'full_name': user[3],
-            'profile_picture': user[4],
-            'status': user[5]
+    user_query = """
+    SELECT 
+        u.user_id,
+        u.username,
+        u.email,
+        u.full_name,
+        u.points,
+        us.title AS status
+    FROM 
+        users u
+    LEFT JOIN 
+        user_statuses us ON u.status_id = us.status_id
+    WHERE 
+        u.user_id = %s;
+    """
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute(user_query, (user_id,))
+        user_data = cur.fetchone()
+
+        data = {
+            "user_id": user_data[0],
+            "username": user_data[1],
+            "email": user_data[2],
+            "full_name": user_data[3],
+            "points": user_data[4],
+            "status": user_data[5]
         }
-        return jsonify(user_data)
-    else:
-        return jsonify({'message': 'User not found'}), 404
+
+        print(data)
+
+        cur.close()
+        conn.close()
+
+        if not data:
+            return jsonify({'error': 'User not found'}), 404
+
+
+        return jsonify(data)
+
+    except Exception as e:
+        print(e)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/users/<int:user_id>/profile_image', methods=['GET'])
+def get_photo(user_id):
+    try:
+        # Проверяем, существует ли файл
+        if os.path.exists(os.path.join("uploads", f"{user_id}.jpg")):
+            # Отправляем файл
+            return send_from_directory("uploads", f"{user_id}.jpg")
+        else:
+            # Если файл не найден, возвращаем 404
+            abort(404, description="File not found")
+    except Exception as e:
+        abort(500, description=f"Server error: {e}")
+
 
 @app.route('/users/add', methods=['POST'])
 def add_user():
