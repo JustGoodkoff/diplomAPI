@@ -8,15 +8,61 @@ from database_config import get_db_connection
 from app_config import app, bcrypt, jwt
 events_bp = Blueprint('events', __name__)
 
-UPLOAD_FOLDER = 'uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+EVENT_UPLOAD_FOLDER = 'uploads/events/'
+USER_UPLOAD_FOLDER = 'uploads/users/'
+os.makedirs(EVENT_UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(USER_UPLOAD_FOLDER, exist_ok=True)
 
 @events_bp.route('/events', methods=['GET'])
 def get_events():
+    sort_options = request.args.get('sort')
+    distance_options = request.args.get('distance')
+    filter_options = request.args.get('type', '')
+    filter_options = filter_options.split(',')
+    print(filter_options)
     conn = get_db_connection()
     cursor = conn.cursor()
+    flag = True
     try:
-        cursor.execute("SELECT event_id, title, description, lat, lon, address, start_date, end_date, start_time, end_time, type_id, created_at, is_allowed, is_canceled FROM events;")
+        query_base = "SELECT event_id, events.title, description, " \
+                     "lat, lon, address, start_date, end_date, " \
+                     "start_time, end_time, events.type_id, event_types.title, created_at, is_allowed, is_canceled" \
+                     " FROM events, event_types " \
+                     "WHERE events.type_id = event_types.type_id "
+
+        if filter_options[0] != "" and filter_options[0] != "all":
+            # cursor.execute(query_base +
+            #                f"AND event_types.type_id = {filter_options[0]};")
+            query_base +=  f"AND events.type_id in ({",".join(filter_options)}) "
+            print("types")
+            print(filter_options)
+            flag = False
+
+        # TODO: добавить сортировку по расстоянию
+
+        if sort_options == "earlier":
+            query_base += f"ORDER BY start_date ASC"
+            print("order")
+            flag = False
+
+        elif sort_options == "later":
+            query_base += f"ORDER BY start_date DESC"
+            print("order")
+            flag = False
+
+
+        query_base += ";"
+
+        if not flag:
+            print("123")
+            cursor.execute(query_base)
+        else:
+            cursor.execute("SELECT event_id, events.title, description, "
+                           "lat, lon, address, start_date, end_date, "
+                           "start_time, end_time, events.type_id, event_types.title, created_at, is_allowed, is_canceled"
+                           " FROM events, event_types "
+                           "WHERE events.type_id = event_types.type_id;")
+
         events = cursor.fetchall()
         events_data = [
             {
@@ -31,9 +77,10 @@ def get_events():
                 'start_time': str(event[8]),
                 'end_time': str(event[9]),
                 'type_id': event[10],
-                'created_at': event[11],
-                'is_allowed': event[12],
-                'is_canceled': event[13]
+                'type_title': event[11],
+                'created_at': event[12],
+                'is_allowed': event[13],
+                'is_canceled': event[14]
             }
             for event in events
         ]
@@ -86,7 +133,7 @@ def add_event():
         conn.commit()
 
         image = request.files['image']
-        image_path = os.path.join(UPLOAD_FOLDER, str(event_id) + ".jpg")
+        image_path = os.path.join(EVENT_UPLOAD_FOLDER, str(event_id) + ".jpg")
         image.save(image_path)
 
         cursor.execute("UPDATE events SET picture_url = %s WHERE event_id = %s;", (image_path, event_id))
