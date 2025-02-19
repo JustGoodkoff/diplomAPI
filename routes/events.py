@@ -2,7 +2,7 @@ import os
 import os
 
 import psycopg2
-from flask import Blueprint
+from flask import Blueprint, send_from_directory, abort
 from flask import jsonify, request
 from database_config import get_db_connection
 from app_config import app, bcrypt, jwt
@@ -77,40 +77,106 @@ def get_events():
                 'start_time': str(event[8]),
                 'end_time': str(event[9]),
                 'type_id': event[10],
-                'type_title': event[11],
+                'type_title': str(event[11]),
                 'created_at': event[12],
                 'is_allowed': event[13],
                 'is_canceled': event[14]
             }
             for event in events
         ]
+        print(events_data)
         return jsonify(events_data)
     finally:
         conn.close()
+
+@app.route('/events/<int:event_id>/event_image', methods=['GET'])
+def get_image(event_id):
+    try:
+        # Проверяем, существует ли файл
+        if os.path.exists(os.path.join("uploads/events", f"{event_id}.jpg")):
+            # Отправляем файл
+            return send_from_directory("uploads/events", f"{event_id}.jpg")
+        else:
+            # Если файл не найден, возвращаем 404
+            abort(404, description="File not found")
+    except Exception as e:
+        try:
+            # Проверяем, существует ли файл
+            if os.path.exists(os.path.join("uploads/users", f"{event_id}.png")):
+                # Отправляем файл
+                return send_from_directory("uploads/users", f"{event_id}.png")
+            else:
+                # Если файл не найден, возвращаем 404
+                abort(404, description="File not found")
+        except Exception as e:
+            abort(500, description=f"Server error: {e}")
+
+
+
 
 @events_bp.route('/events/<int:event_id>', methods=['GET'])
 def get_event(event_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT event_id, title, description, lat, lon, address, start_date, end_date, start_time, end_time, type_id, created_at, is_allowed, is_canceled FROM events WHERE event_id = %s;", (event_id,))
+        # cursor.execute("SELECT event_id, events.title, description, "
+        #                "lat, lon, address, start_date, end_date, "
+        #                "start_time, end_time, events.type_id,created_at, "
+        #                "is_allowed, is_canceled, event_types.title "
+        #                "FROM events, event_types "
+        #                "WHERE event_id = %s "
+        #                "AND events.type_id = event_types.type_id;", (event_id,))
+        cursor.execute("""
+    SELECT 
+        e.event_id,
+        e.title,
+        e.description,
+        e.lat,
+        e.lon,
+        e.address,
+        e.start_date,
+        e.end_date,
+        e.start_time,
+        e.end_time,
+        e.picture_url,
+        e.type_id,
+        et.title AS event_type,  -- Получаем название типа события
+        e.created_at,
+        e.is_allowed,
+        e.is_canceled,
+        u.username,
+        u.profile_picture_url,
+        u.user_id,
+        us.title AS status
+    FROM events e
+    JOIN users u ON e.creator_id = u.user_id
+    LEFT JOIN user_statuses us ON u.status_id = us.status_id
+    LEFT JOIN event_types et ON e.type_id = et.type_id  -- Соединяем с таблицей event_types
+    WHERE e.event_id = %s;
+""", (event_id,))
         event = cursor.fetchone()
         if event:
             event_data = {
                 'event_id': event[0],
-                'title': event[1],
-                'description': event[2],
-                'lat': event[3],
-                'lon': event[4],
-                'address': event[5],
-                'start_date': event[6],
-                'end_date': event[7],
-                'start_time': str(event[8]),
-                'end_time': str(event[9]),
-                'type_id': event[10],
-                'created_at': event[11],
-                'is_allowed': event[12],
-                'is_canceled': event[13]
+        'title': event[1],
+        'description': event[2],
+        'lat': event[3],
+        'lon': event[4],
+        'address': event[5],
+        'start_date': event[6],
+        'end_date': event[7],
+        'start_time': str(event[8]),
+        'end_time': str(event[9]),
+        'picture_url': event[10],
+        'type_id': event[11],
+        'event_type': event[12],  # Добавлено поле для типа события
+        'created_at': event[13],
+        'is_allowed': event[14],
+        'is_canceled': event[15],
+        'username': event[16],
+        'profile_picture_url': event[17],
+        'user_id': event[18],
+        'status': event[19]
             }
             return jsonify(event_data)
         else:
@@ -126,8 +192,8 @@ def add_event():
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "INSERT INTO events (title, description, lat, lon, address, start_date, end_date, start_time, end_time, type_id, creator_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING event_id;",
-            (data['title'], data['description'], data['lat'], data['lon'], data['address'], data['start_date'], data['end_date'], data['start_time'], data['end_time'], data['type_id'], data['creator_id'])
+            "INSERT INTO events (title, description, lat, lon, address, start_date, start_time, end_time, type_id, creator_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING event_id;",
+            (data['title'], data['description'], data['lat'], data['lon'], data['address'], data['start_date'], data['start_time'], data['end_time'], data['type_id'], data['creator_id'])
         )
         event_id = cursor.fetchone()[0]
         conn.commit()
@@ -160,6 +226,34 @@ def get_event_types():
         return jsonify(types_data), 200
     finally:
         conn.close()
+
+@events_bp.route('/events/placemarks', methods=['GET'])
+def get_placemarks():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""SELECT 
+    event_id,
+    lat,
+    lon,
+    et.title
+    FROM events e
+    LEFT JOIN event_types et ON e.type_id = et.type_id  -- Соединяем с таблицей event_types
+    """)
+        event_types = cursor.fetchall()
+        types_data = [
+            {
+                'event_id': event_type[0],
+                'lat': event_type[1],
+                'lon': event_type[2]
+            }
+            for event_type in event_types
+        ]
+        return jsonify(types_data), 200
+    finally:
+        conn.close()
+
+
 
 
 @events_bp.route('/events/<int:event_id>/edit', methods=['PUT'])
