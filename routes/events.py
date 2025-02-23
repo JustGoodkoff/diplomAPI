@@ -245,10 +245,12 @@ def get_placemarks():
             {
                 'event_id': event_type[0],
                 'lat': event_type[1],
-                'lon': event_type[2]
+                'lon': event_type[2],
+                'type': event_type[3]
             }
             for event_type in event_types
         ]
+        print()
         return jsonify(types_data), 200
     finally:
         conn.close()
@@ -393,6 +395,30 @@ def get_event_registrations(event_id):
     ]
 
     return jsonify(registrations_data)
+
+
+# подтвердить регистрацию пользователя
+@events_bp.route('/events/<int:event_id>/confirm_visit/', methods=['POST'])
+def set_visited(event_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    data = request.get_json()
+    user_id = data.get('user_id')
+    print(user_id)
+    # Проверяем, существует ли событие
+    cursor.execute("UPDATE event_registrations SET attendance_confirmed=true WHERE event_id = %s and user_id = %s;",
+                   (event_id, user_id))
+    conn.commit()
+
+    cursor.execute("SELECT * FROM event_registrations WHERE event_id = %s and user_id = %s;", (event_id, user_id))
+
+    ref = cursor.fetchone()
+    if not ref:
+        conn.close()
+        return jsonify({'message': 'Registration not found'}), 404
+    conn.close()
+
+    return jsonify({'result': ref[2]})
 
 # отменить регистрацию
 @events_bp.route('/registrations/<int:registration_id>/cancel', methods=['DELETE'])
